@@ -15,24 +15,39 @@ Built with Django (DRF + Channels) and React (TypeScript + Vite).
 
 ## Running it
 
-### Option A: Docker Compose (one command)
+### Option A: Docker Compose (recommended, one command)
 
+**Setup + start:**
 ```bash
-docker compose up --build
+docker compose up --build -d
+```
+This builds and starts Postgres, Redis, the Django/Channels backend (migrates, seeds 40 venues, creates a default login), a transaction simulator, and the React dev server. `-d` runs it detached; drop it to watch logs stream instead.
+
+**Check status / logs:**
+```bash
+docker compose ps
+docker compose logs -f            # all services
+docker compose logs -f backend    # just one (backend/frontend/db/redis/simulator)
 ```
 
-This starts Postgres, Redis, the Django/Channels backend (migrates, seeds 40 venues, creates a default login), a transaction simulator, and the React dev server.
+**Stop:**
+```bash
+docker compose down
+```
+Containers are removed but the Postgres data volume persists across restarts. Add `-v` (`docker compose down -v`) to also wipe the database for a clean slate next time.
 
+**Once running:**
 - Dashboard: http://localhost:5173
-- Login: `ops_admin` / `ops-admin-pass123` (override via `OPS_ADMIN_USERNAME` / `OPS_ADMIN_PASSWORD`)
+- Django admin: http://localhost:8000/admin/
 - API: http://localhost:8000
+- Login (both): `ops_admin` / `ops-admin-pass123` (override via `OPS_ADMIN_USERNAME` / `OPS_ADMIN_PASSWORD`)
 
 ### Option B: Native (no Docker)
 
-The app also runs with zero external services — SQLite by default, and Django Channels' in-memory layer instead of Redis. This is how it was actually developed and verified in this environment, since Docker Desktop requires WSL2 + an interactive elevation step this sandbox couldn't perform non-interactively.
+The app also runs with zero external services — SQLite by default, and Django Channels' in-memory layer instead of Redis. This is how it was actually developed in this environment before Docker was available, and it's still a fine way to run it without installing Docker at all.
 
+**One-time setup:**
 ```bash
-# Backend
 cd backend
 python -m venv venv
 ./venv/Scripts/activate        # Windows; `source venv/bin/activate` on macOS/Linux
@@ -41,20 +56,39 @@ cp .env.example .env
 python manage.py migrate
 python manage.py loaddata venues
 python manage.py ensure_admin   # creates ops_admin / ops-admin-pass123
+```
+
+**Start (3 separate terminals, each from the repo root):**
+```bash
+# Terminal 1 - backend
+cd backend && ./venv/Scripts/activate
 python -m daphne -b 127.0.0.1 -p 8000 config.asgi:application
 
-# Simulator (separate terminal, same venv)
-cd backend
+# Terminal 2 - simulator (backfills history, then streams live transactions)
+cd backend && ./venv/Scripts/activate
 python manage.py simulate_transactions
 
-# Frontend (separate terminal)
+# Terminal 3 - frontend
 cd frontend
-npm install
-cp .env.example .env
+npm install     # first time only
 npm run dev
 ```
 
-Then open http://localhost:5173.
+**Stop:** `Ctrl+C` in each terminal.
+
+**Once running:**
+- Dashboard: http://localhost:5173
+- Django admin: http://localhost:8000/admin/
+- Login (both): `ops_admin` / `ops-admin-pass123`
+
+**Reset local data** (wipe and reseed SQLite):
+```bash
+cd backend
+rm db.sqlite3
+python manage.py migrate
+python manage.py loaddata venues
+python manage.py ensure_admin
+```
 
 ### Running tests
 
@@ -131,4 +165,4 @@ This is a deliberate simplification. A fresh dataset has no multi-day history, s
 
 - Backend: 22 unit tests covering aggregation queries, both anomaly rules (including the boundary/threshold edge cases), ingestion validation, idempotency, and auth enforcement (`python manage.py test ops`).
 - Manual end-to-end: ran the full native stack (Daphne + simulator + Vite dev server) and drove it with a scripted Playwright browser session — logged in, confirmed all 40 venues render ranked with correct anomaly badges, opened the drill-down modal and confirmed the hourly chart and per-venue item list render, and confirmed a posted transaction arrives on an already-open dashboard via the WebSocket without a refresh.
-- Did not verify the Docker Compose path end-to-end in this environment, since Docker Desktop requires WSL2 and an interactive elevation step this sandbox can't perform non-interactively. The compose file follows the same code paths already verified natively (same Django app, same migrations, same Channels consumer) with only the backing services swapped (Postgres/Redis instead of SQLite/in-memory) — but it's worth a first run before relying on it.
+- Docker Compose path verified end-to-end: `docker compose up --build` brings up Postgres, Redis, backend, frontend, and the simulator; confirmed login, all 40 ranked venues, correct anomaly flags, and the Django admin's static assets all work against the containerized stack.

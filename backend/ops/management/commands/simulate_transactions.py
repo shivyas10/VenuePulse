@@ -104,15 +104,20 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from ops.models import Venue
 
+        self.base_url = options["base_url"].rstrip("/")
+        self.session = requests.Session()
+        self.session.headers["Authorization"] = f"Bearer {options['token']}"
+        # Under docker-compose the simulator and backend containers start
+        # concurrently, but the simulator queries Venue directly against the
+        # same database - wait for the backend's health check (which only
+        # succeeds once migrate + loaddata have run) before touching the DB,
+        # or this races the backend's migrations and crashes on a missing table.
+        self._wait_for_backend()
+
         venues = list(Venue.objects.all().values("id", "name", "kind"))
         if not venues:
             self.stderr.write("No venues found - run `manage.py loaddata venues` first.")
             return
-
-        self.base_url = options["base_url"].rstrip("/")
-        self.session = requests.Session()
-        self.session.headers["Authorization"] = f"Bearer {options['token']}"
-        self._wait_for_backend()
 
         if not options["no_backfill"]:
             self._backfill(venues, options["backfill_hours"], options["concurrency"])
