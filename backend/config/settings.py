@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -106,6 +107,18 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Daphne (unlike `runserver`) doesn't auto-serve static files, and this
+    # app has no separate reverse proxy in front of it - WhiteNoise serves
+    # the Django admin's CSS/JS directly from the ASGI app in every
+    # environment (native run and docker-compose alike).
+    # Plain (non-manifest) storage - simpler for a local/dev deployment:
+    # no risk of a template failing to render because collectstatic wasn't
+    # re-run after a static asset changed.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- DRF ----------------------------------------------------------------

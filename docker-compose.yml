@@ -26,6 +26,7 @@ services:
       sh -c "python manage.py migrate &&
              python manage.py loaddata venues &&
              python manage.py ensure_admin &&
+             python manage.py collectstatic --noinput &&
              daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     environment:
       DJANGO_SECRET_KEY: dev-secret-change-me
